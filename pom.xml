@@ -22,7 +22,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-        <jjwt.version>0.12.7</jjwt.version>
+        <jjwt.version>0.13.0</jjwt.version>
         <jsoup.version>1.23.2</jsoup.version>
         <owasp-encoder.version>1.3.1</owasp-encoder.version>
         <springdoc.version>2.9.1</springdoc.version>
