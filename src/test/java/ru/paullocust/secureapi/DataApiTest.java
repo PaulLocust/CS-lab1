@@ -12,6 +12,8 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -136,6 +138,56 @@ class DataApiTest extends AbstractApiTest {
         mockMvc.perform(get("/api/users")
                         .header(HttpHeaders.AUTHORIZATION, bearer(userToken)))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Пропущенный обязательный параметр даёт 400, а не 500")
+    void missingRequiredParameterIsBadRequest() throws Exception {
+        String token = loginAndGetToken(USER_USERNAME, USER_PASSWORD);
+
+        mockMvc.perform(get("/api/data/search")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("bad_request"));
+    }
+
+    @Test
+    @DisplayName("Параметр не того типа даёт 400, а не 500")
+    void wrongParameterTypeIsBadRequest() throws Exception {
+        String token = loginAndGetToken(USER_USERNAME, USER_PASSWORD);
+
+        mockMvc.perform(get("/api/data").param("page", "abc")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(delete("/api/data/abc")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Неподдерживаемый HTTP-метод даёт 405 с заголовком Allow")
+    void unsupportedMethodIsNotAllowed() throws Exception {
+        String token = loginAndGetToken(USER_USERNAME, USER_PASSWORD);
+
+        mockMvc.perform(put("/api/data")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(header().exists(HttpHeaders.ALLOW))
+                .andExpect(jsonPath("$.error").value("method_not_allowed"));
+    }
+
+    @Test
+    @DisplayName("Тело не в формате JSON даёт 415")
+    void unsupportedMediaTypeIsRejected() throws Exception {
+        String token = loginAndGetToken(USER_USERNAME, USER_PASSWORD);
+
+        mockMvc.perform(post("/api/data")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .content("title=test"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.error").value("unsupported_media_type"));
     }
 
     private long createPost(String token, String title, String content) throws Exception {

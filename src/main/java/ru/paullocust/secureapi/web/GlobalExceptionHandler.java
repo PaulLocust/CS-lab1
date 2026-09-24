@@ -5,14 +5,19 @@ import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import ru.paullocust.secureapi.dto.ApiErrorResponse;
 import ru.paullocust.secureapi.exception.InvalidCredentialsException;
 import ru.paullocust.secureapi.exception.ResourceNotFoundException;
@@ -62,6 +67,45 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST.value(),
                 "validation_error",
                 "Некорректные параметры запроса",
+                request.getRequestURI()));
+    }
+
+    /** Обязательный query-параметр не передан или значение не того типа. */
+    @ExceptionHandler({MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ApiErrorResponse> handleBadRequestParameter(Exception ex, HttpServletRequest request) {
+        LOG.debug("Некорректный параметр запроса: {}", safe(ex.getMessage()));
+        return ResponseEntity.badRequest().body(ApiErrorResponse.of(
+                HttpStatus.BAD_REQUEST.value(),
+                "bad_request",
+                "Некорректные параметры запроса",
+                request.getRequestURI()));
+    }
+
+    /** Метод не поддерживается эндпоинтом. */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex,
+                                                                     HttpServletRequest request) {
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
+        var supported = ex.getSupportedHttpMethods();
+        if (supported != null && !supported.isEmpty()) {
+            response.allow(supported.toArray(new HttpMethod[0]));
+        }
+        return response.body(ApiErrorResponse.of(
+                HttpStatus.METHOD_NOT_ALLOWED.value(),
+                "method_not_allowed",
+                "HTTP-метод не поддерживается этим эндпоинтом",
+                request.getRequestURI()));
+    }
+
+    /** Неподдерживаемый Content-Type: API принимает только JSON. */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiErrorResponse> handleUnsupportedMediaType(HttpMediaTypeNotSupportedException ex,
+                                                                       HttpServletRequest request) {
+        LOG.debug("Неподдерживаемый Content-Type: {}", safe(String.valueOf(ex.getContentType())));
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(ApiErrorResponse.of(
+                HttpStatus.UNSUPPORTED_MEDIA_TYPE.value(),
+                "unsupported_media_type",
+                "Тело запроса должно передаваться как application/json",
                 request.getRequestURI()));
     }
 
