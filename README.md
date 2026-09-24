@@ -432,9 +432,8 @@ pull request в `main`**, а также по расписанию (еженед�
 * **OWASP Dependency-Check** настроен с `failBuildOnCVSS=7` — job падает на HIGH/CRITICAL.
   Отдельная история — источник данных о CVE. По умолчанию плагин наполняет локальную базу
   через **NVD API**, а он без ключа отдаёт данные порциями с лимитом 5 запросов в 30 секунд:
-  полная загрузка ~300 тыс. CVE в CI просто не завершается (замер на этом репозитории —
-  25+ минут и обрыв по лимиту,
-  [прогон](https://github.com/PaulLocust/CS-lab1/actions/runs/34507324727)).
+  полная загрузка ~300 тыс. CVE в CI просто не завершается — замер на этом проекте
+  дал 25+ минут и обрыв по лимиту.
 
   Решение — переключить плагин с API на **JSON-фиды 2.0** параметром `nvdDatafeedUrl`
   (см. [pom.xml](pom.xml)): готовые годовые файлы берутся с зеркала, которое ведёт сама
@@ -541,32 +540,32 @@ pull request в `main`**, а также по расписанию (еженед�
 можно было проверить в оригинале.
 
 **1. Общий вид пайплайна: все пять job зелёные** —
-[запуск в Actions](https://github.com/PaulLocust/CS-lab1/actions/runs/35440776410)
+[запуск в Actions](https://github.com/PaulLocust/CS-lab1/actions/runs/35995043294)
 
 ![Успешный запуск пайплайна](docs/screenshots/01-pipeline-success.png)
 
 **2. SAST — SpotBugs + FindSecBugs: находок нет** —
-[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35440776410/job/105891049554)
+[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35995043294/job/107617851955)
 
 ![Отчёт SpotBugs](docs/screenshots/02-sast-spotbugs.png)
 
 **3. SCA — Trivy: уязвимостей уровня HIGH/CRITICAL нет** —
-[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35440776410/job/105891176722)
+[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35995043294/job/107618117480)
 
 ![Отчёт Trivy](docs/screenshots/03-sca-trivy.png)
 
 **4. SCA — OWASP Dependency-Check: блокирующих уязвимостей нет** —
-[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35440776410/job/105891049705)
+[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35995043294/job/107617851853)
 
 ![Отчёт Dependency-Check](docs/screenshots/04-sca-dependency-check.png)
 
 **5. Автотесты: 39 из 39 пройдено** —
-[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35440776410/job/105891049634)
+[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35995043294/job/107617852005)
 
 ![Автотесты](docs/screenshots/05-tests.png)
 
 **6. SAST — CodeQL** —
-[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35440776410/job/105891049693)
+[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35995043294/job/107617852089)
 
 ![Отчёт CodeQL](docs/screenshots/06-codeql.png)
 
@@ -577,10 +576,10 @@ pull request в `main`**, а также по расписанию (еженед�
 
 ## Ссылка на успешный запуск pipeline
 
-* **Последний успешный запуск:** <https://github.com/PaulLocust/CS-lab1/actions/runs/35440776410>
+* **Последний успешный запуск:** <https://github.com/PaulLocust/CS-lab1/actions/runs/35995043294>
   — статус `Success`, все пять job зелёные, отчёты сканеров в артефактах.
-  Длительность job: сборка и тесты 62 с, SpotBugs 51 с, Trivy 48 с,
-  CodeQL 103 с, OWASP Dependency-Check 156 с (холодный старт, база CVE строилась с нуля)
+  Длительность job: сборка и тесты 47 с, SpotBugs 52 с, Trivy 42 с,
+  CodeQL 80 с, OWASP Dependency-Check 156 с (холодный старт, база CVE строилась с нуля)
 * Все запуски workflow «CI / Security»:
   <https://github.com/PaulLocust/CS-lab1/actions/workflows/ci.yml>
 
