@@ -1,0 +1,31 @@
+# Сборка
+target/
+build/
+out/
+
+# Отчёты сканеров (генерируются в CI, в репозиторий не коммитятся)
+dependency-check-report.*
+*.sarif
+spotbugsXml.xml
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+
+# ОС
+Thumbs.db
+.DS_Store
+
+# Секреты и локальные настройки — в репозитории им не место
+.env
+.env.*
+*.p12
+*.jks
+application-local.yml
+application-local.properties

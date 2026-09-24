@@ -1,0 +1,103 @@
+spring:
+  application:
+    name: cs-lab1-secure-api
+
+  # Учебная БД в памяти. Для PostgreSQL достаточно поменять url/драйвер —
+  # код от диалекта не зависит, так как все запросы параметризованы через JPA/JDBC.
+  datasource:
+    url: jdbc:h2:mem:secureapi;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ${DB_PASSWORD:}
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  # Веб-консоль H2 выключена: это административный интерфейс к БД,
+  # его публикация в сети — типичная security misconfiguration (OWASP A05).
+  h2:
+    console:
+      enabled: false
+
+server:
+  port: 8080
+  # Никаких стектрейсов и внутренних сообщений в ответах клиенту.
+  error:
+    include-stacktrace: never
+    include-message: never
+    include-exception: false
+    include-binding-errors: never
+  tomcat:
+    max-http-form-post-size: 256KB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+app:
+  jwt:
+    # ВАЖНО: значение по умолчанию годится только для локальной разработки.
+    # В любом реальном окружении секрет задаётся переменной окружения APP_JWT_SECRET
+    # и хранится в менеджере секретов, а не в репозитории.
+    secret: ${APP_JWT_SECRET:local-dev-only-secret-please-override-32bytes-min}
+    issuer: cs-lab1-secure-api
+    audience: cs-lab1-clients
+    # Короткий срок жизни токена ограничивает окно эксплуатации при его утечке.
+    access-token-ttl: PT15M
+
+  security:
+    max-login-attempts: 5
+    login-lock-duration: PT15M
+    allowed-origins:
+      - http://localhost:3000
+      - http://localhost:5173
+
+  # Демонстрационные учётные записи: пароли попадают в БД только как BCrypt-хеши.
+  seed:
+    admin-username: admin
+    admin-password: ${APP_SEED_ADMIN_PASSWORD:Admin#Str0ng-2026}
+    user-username: alice
+    user-password: ${APP_SEED_USER_PASSWORD:Alice#Str0ng-2026}
+
+logging:
+  level:
+    root: INFO
+    ru.paullocust.secureapi: INFO
+    org.springframework.security: INFO
+
+---
+# Профиль prod: секреты обязаны прийти из окружения, документация API закрыта.
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET}
+  seed:
+    admin-password: ${APP_SEED_ADMIN_PASSWORD}
+    user-password: ${APP_SEED_USER_PASSWORD}

@@ -1,0 +1,25 @@
+# Автоматическое обновление зависимостей.
+#
+# SCA-сканер сообщает об уязвимых библиотеках постфактум; Dependabot закрывает вторую
+# половину задачи — регулярно приносит обновления, в том числе security-патчи,
+# и открывает PR, который проходит тот же пайплайн проверок.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - security
+
+  # Экшены в workflow — тоже сторонний код, его версии нужно обновлять.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - ci

@@ -1,0 +1,302 @@
+{
+  "info": {
+    "name": "CS-lab1 Secure REST API",
+    "description": "Коллекция для проверки защищённого REST API: аутентификация JWT, доступ к данным, защита от XSS и SQL-инъекций, разграничение прав. После запроса 'Login (alice)' токен автоматически сохраняется в переменную {{token}}.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "token", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "postId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "0. Health check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/actuator/health", "host": ["{{baseUrl}}"], "path": ["actuator", "health"] }
+      }
+    },
+    {
+      "name": "1. Login (alice) — сохраняет токен",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('токен выдан', () => pm.expect(body.accessToken).to.be.a('string').and.not.empty);",
+              "pm.collectionVariables.set('token', body.accessToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"Alice#Str0ng-2026\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+      }
+    },
+    {
+      "name": "2. Login — неверный пароль (ожидаем 401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+              "pm.test('ответ не раскрывает существование пользователя', () => pm.expect(pm.response.json().message).to.eql('Неверный логин или пароль'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"WrongPassword#1\"\n}" },
+        "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+      }
+    },
+    {
+      "name": "3. GET /api/data без токена (ожидаем 401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', () => pm.response.to.have.status(401));"]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/api/data", "host": ["{{baseUrl}}"], "path": ["api", "data"] }
+      }
+    },
+    {
+      "name": "4. GET /api/data с токеном (ожидаем 200)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('есть массив items', () => pm.expect(pm.response.json().items).to.be.an('array'));",
+              "pm.test('заголовок nosniff выставлен', () => pm.expect(pm.response.headers.get('X-Content-Type-Options')).to.eql('nosniff'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/data?page=0&size=10",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "data"],
+          "query": [
+            { "key": "page", "value": "0" },
+            { "key": "size", "value": "10" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "5. GET /api/me — профиль по токену",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": { "raw": "{{baseUrl}}/api/me", "host": ["{{baseUrl}}"], "path": ["api", "me"] }
+      }
+    },
+    {
+      "name": "6. POST /api/data — XSS-payload вырезается",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('postId', body.id);",
+              "pm.test('разметка вырезана', () => {",
+              "  pm.expect(body.title).to.not.include('<script');",
+              "  pm.expect(body.content).to.not.include('onerror');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"XSS <script>alert('pwned')</script> Проверка\",\n  \"content\": \"<img src=x onerror=alert(1)> Обычный текст & спецсимволы\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/data", "host": ["{{baseUrl}}"], "path": ["api", "data"] }
+      }
+    },
+    {
+      "name": "7. GET /api/data/search — SQL-инъекция безвредна",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('данные не утекли', () => pm.expect(pm.response.json()).to.be.an('array').that.is.empty);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/data/search?query=' OR '1'='1",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "data", "search"],
+          "query": [{ "key": "query", "value": "' OR '1'='1" }]
+        }
+      }
+    },
+    {
+      "name": "8. GET /api/data/search — попытка DROP TABLE",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/data/search?query=x'; DROP TABLE posts; --",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "data", "search"],
+          "query": [{ "key": "query", "value": "x'; DROP TABLE posts; --" }]
+        }
+      }
+    },
+    {
+      "name": "9. GET /api/users обычным пользователем (ожидаем 403)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 403', () => pm.response.to.have.status(403));"]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api", "users"] }
+      }
+    },
+    {
+      "name": "10. Login (admin) — сохраняет adminToken",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('adminToken', pm.response.json().accessToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"Admin#Str0ng-2026\"\n}" },
+        "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+      }
+    },
+    {
+      "name": "11. GET /api/users администратором (ожидаем 200)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('хеши паролей не отдаются', () => pm.expect(pm.response.text()).to.not.include('$2b$'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+        "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api", "users"] }
+      }
+    },
+    {
+      "name": "12. DELETE /api/data/{id} — автор удаляет свою запись",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 204', () => pm.response.to.have.status(204));"]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/data/{{postId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "data", "{{postId}}"]
+        }
+      }
+    },
+    {
+      "name": "13. Подделанный токен (ожидаем 401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', () => pm.response.to.have.status(401));"]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiIsInJvbGVzIjpbIlJPTEVfQURNSU4iXX0.invalid-signature" }],
+        "url": { "raw": "{{baseUrl}}/api/data", "host": ["{{baseUrl}}"], "path": ["api", "data"] }
+      }
+    },
+    {
+      "name": "14. POST /auth/register — регистрация нового пользователя",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"new.user\",\n  \"password\": \"NewUser#2026pass\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] }
+      }
+    }
+  ]
+}

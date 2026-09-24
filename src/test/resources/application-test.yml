@@ -1,0 +1,18 @@
+# Настройки для автотестов: отдельный секрет и короткая блокировка,
+# чтобы тест на brute-force выполнялся быстро и детерминированно.
+app:
+  jwt:
+    secret: test-only-secret-value-for-unit-tests-32b+
+    access-token-ttl: PT5M
+  security:
+    max-login-attempts: 3
+    login-lock-duration: PT2S
+  seed:
+    admin-username: admin
+    admin-password: Admin#Test-2026
+    user-username: alice
+    user-password: Alice#Test-2026
+
+logging:
+  level:
+    org.springframework.security: WARN

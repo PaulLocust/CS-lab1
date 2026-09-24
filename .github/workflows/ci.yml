@@ -1,0 +1,249 @@
+name: CI / Security
+
+# Запуск на каждый push и pull request в main, плюс еженедельно:
+# уязвимость могут опубликовать уже после мерджа.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+# По умолчанию токену доступно только чтение.
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: '21'
+
+jobs:
+  # ---------------------------------------------------------------- сборка
+  build-and-test:
+    name: Сборка и автотесты
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить исходный код
+        uses: actions/checkout@v4
+
+      - name: Установить JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Прогнать тесты
+        run: ./mvnw -B -ntp test
+
+      - name: Собрать jar
+        run: ./mvnw -B -ntp -DskipTests package
+
+      - name: Сохранить отчёты о тестах
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            target/surefire-reports/
+            target/site/jacoco/
+          if-no-files-found: warn
+
+      - name: Сохранить собранный артефакт
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-jar
+          path: target/*.jar
+          if-no-files-found: error
+
+  # ------------------------------------------------------------------ SAST
+  sast-spotbugs:
+    name: SAST — SpotBugs + FindSecBugs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Получить исходный код
+        uses: actions/checkout@v4
+
+      - name: Установить JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      # Падает при любой находке: effort=Max, threshold=Low.
+      - name: Статический анализ безопасности
+        run: ./mvnw -B -ntp -DskipTests verify
+
+      - name: Сохранить отчёт SpotBugs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spotbugs-report
+          path: |
+            target/spotbugsXml.xml
+            target/spotbugsSarif.json
+          if-no-files-found: warn
+
+      # Результаты видны во вкладке Security → Code scanning.
+      - name: Загрузить SARIF в GitHub Code Scanning
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: target/spotbugsSarif.json
+          category: spotbugs
+
+  # ------------------------------------------------------------------- SCA
+  sca-trivy:
+    name: SCA — Trivy (зависимости собранного jar)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Получить исходный код
+        uses: actions/checkout@v4
+
+      - name: Скачать собранный jar
+        uses: actions/download-artifact@v4
+        with:
+          name: application-jar
+          path: target
+
+      # Trivy разбирает fat-jar и сверяет вложенные библиотеки с базой уязвимостей.
+      - name: Проверить зависимости на известные уязвимости
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: target
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+      - name: Сформировать SARIF-отчёт
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: target
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '0'
+          format: sarif
+          output: trivy-results.sarif
+
+      - name: Сохранить отчёт Trivy
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-results.sarif
+          if-no-files-found: warn
+
+      - name: Загрузить SARIF в GitHub Code Scanning
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
+  # ------------------------------------------ SCA (OWASP Dependency-Check)
+  sca-dependency-check:
+    name: SCA — OWASP Dependency-Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Получить исходный код
+        uses: actions/checkout@v4
+
+      - name: Установить JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      # Ключ меняется раз в сутки: база строится раз в день, дальше докачивается только "modified".
+      - name: Вычислить дневной ключ кеша
+        id: cache-key
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Восстановить кеш базы CVE
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: dependency-check-data-${{ steps.cache-key.outputs.day }}
+          restore-keys: dependency-check-data-
+
+      # Настройки сканера — в pom.xml, профиль security-scan: источник данных о CVE
+      # и порог failBuildOnCVSS=7.
+      - name: Проверить зависимости (OWASP Dependency-Check)
+        run: ./mvnw -B -ntp -DskipTests -Psecurity-scan verify
+
+      - name: Сохранить отчёт Dependency-Check
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: |
+            target/dependency-check-report.html
+            target/dependency-check-report.json
+            target/dependency-check-report.sarif
+          if-no-files-found: warn
+
+      - name: Загрузить SARIF в GitHub Code Scanning
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: target/dependency-check-report.sarif
+          category: dependency-check
+
+  # ------------------------------------------------------- SAST от GitHub
+  codeql:
+    name: SAST — CodeQL
+    runs-on: ubuntu-latest
+    # Для приватных репозиториев на бесплатном тарифе code scanning недоступен,
+    # поэтому job не блокирует пайплайн.
+    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - name: Получить исходный код
+        uses: actions/checkout@v4
+
+      - name: Установить JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Инициализировать CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: java-kotlin
+          queries: security-extended
+
+      - name: Собрать проект для анализа
+        run: ./mvnw -B -ntp -DskipTests compile
+
+      - name: Анализ CodeQL
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: codeql-java

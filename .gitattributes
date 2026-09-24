@@ -1,0 +1,16 @@
+# Нормализация переводов строк: в репозитории всегда LF.
+* text=auto eol=lf
+
+# Скрипты для Unix — строго LF, иначе Linux-раннер в CI не сможет их запустить.
+mvnw          text eol=lf
+*.sh          text eol=lf
+
+# Windows-скрипты — CRLF.
+*.cmd         text eol=crlf
+*.bat         text eol=crlf
+*.ps1         text eol=crlf
+
+# Бинарные файлы не трогаем.
+*.png         binary
+*.jpg         binary
+*.jar         binary

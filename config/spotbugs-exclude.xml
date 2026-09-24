@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Исключения для SpotBugs + FindSecBugs.
+
+  Анализ идёт с effort=Max и threshold=Low, поэтому в отчёт попадают и информационные
+  детекторы. Здесь только разобранные ложные срабатывания с обоснованием; настоящие
+  находки исправлены в коде.
+-->
+<FindBugsFilter xmlns="https://github.com/spotbugs/filter/3.0.0"
+                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xsi:schemaLocation="https://github.com/spotbugs/filter/3.0.0 https://raw.githubusercontent.com/spotbugs/spotbugs/master/spotbugs/etc/findbugsfilter.xsd">
+
+    <!--
+      SPRING_ENDPOINT — информационный детектор: он просто отмечает все контроллеры
+      как точки входа, требующие ревью. Это не дефект; ревью проведено, доступ к
+      эндпоинтам описан в SecurityConfig (deny by default) и покрыт тестами.
+    -->
+    <Match>
+        <Bug pattern="SPRING_ENDPOINT"/>
+    </Match>
+
+    <!--
+      SERVLET_HEADER — «значение заголовка контролируется клиентом». Для JWT-фильтра
+      это неизбежно: токен приходит именно в заголовке Authorization. Значение не
+      используется как доверенное — оно проверяется криптографически (HMAC-подпись,
+      exp/iss/aud) в JwtService, и при любой ошибке аутентификация не выдаётся.
+    -->
+    <Match>
+        <Class name="ru.paullocust.secureapi.security.JwtAuthenticationFilter"/>
+        <Method name="resolveToken"/>
+        <Bug pattern="SERVLET_HEADER"/>
+    </Match>
+
+    <!--
+      CRLF_INJECTION_LOGS в обработчике непредвиденных ошибок. Путь запроса проходит через
+      LogSanitizer (CR/LF заменяются на «_»), а второй аргумент — сам Throwable: его стектрейс
+      многострочен по своей природе, и отказ от логирования исключения лишил бы нас
+      возможности разбирать инциденты. Остальные срабатывания этого детектора устранены
+      в коде — все пользовательские значения логируются через LogSanitizer.
+    -->
+    <Match>
+        <Class name="ru.paullocust.secureapi.web.GlobalExceptionHandler"/>
+        <Method name="handleUnexpected"/>
+        <Bug pattern="CRLF_INJECTION_LOGS"/>
+    </Match>
+
+    <!--
+      EI_EXPOSE_REP / EI_EXPOSE_REP2 в компонентах Spring. Бины (ObjectMapper, сервисы,
+      репозитории) внедряются контейнером и по определению разделяются между всеми
+      потребителями; «защитное копирование» здесь не имеет смысла и сломало бы DI.
+      Для настроек (SecurityProperties) копия всё же делается — см. компактный конструктор.
+    -->
+    <Match>
+        <Package name="~ru\.paullocust\.secureapi\.(web|security|service|repository|config|dto)"/>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+</FindBugsFilter>
