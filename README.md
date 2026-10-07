@@ -550,38 +550,39 @@ NVD указывает исправление в Spring Security 6.5.12, но т
 
 ## Скриншоты отчётов
 
-Скриншоты снимаются во вкладке **Actions** репозитория и лежат в `docs/screenshots/`
+Скриншоты сняты с прогона № 18 и лежат в `docs/screenshots/`; снимки Trivy и автотестов —
+с более раннего прогона № 12, он тоже завершился успешно.
 (что именно снимать — описано в [docs/screenshots/README.md](docs/screenshots/README.md)).
 Рядом с каждым скриншотом — прямая ссылка на соответствующий job, чтобы вывод сканера
 можно было проверить в оригинале.
 
-**1. Общий вид пайплайна: все пять job зелёные** —
-[запуск в Actions](https://github.com/PaulLocust/CS-lab1/actions/runs/35995043294)
+**1. Общий вид пайплайна: все пять job зелёные, 2 мин 51 с** —
+[запуск в Actions](https://github.com/PaulLocust/CS-lab1/actions/runs/37618698750)
 
 ![Успешный запуск пайплайна](docs/screenshots/01-pipeline-success.png)
 
 **2. SAST — SpotBugs + FindSecBugs: находок нет** —
-[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35995043294/job/107617851955)
+[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/37618698750/job/112783218535)
 
 ![Отчёт SpotBugs](docs/screenshots/02-sast-spotbugs.png)
 
 **3. SCA — Trivy: уязвимостей уровня HIGH/CRITICAL нет** —
-[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35995043294/job/107618117480)
+[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/37618698750/job/112783494741)
 
 ![Отчёт Trivy](docs/screenshots/03-sca-trivy.png)
 
-**4. SCA — OWASP Dependency-Check: блокирующих уязвимостей нет** —
-[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35995043294/job/107617851853)
+**4. SCA — OWASP Dependency-Check: 93 зависимости, 8 находок уровня MEDIUM, 15 подавлено, блокирующих нет** —
+[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/37618698750/job/112783218325)
 
 ![Отчёт Dependency-Check](docs/screenshots/04-sca-dependency-check.png)
 
-**5. Автотесты: 39 из 39 пройдено** —
-[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35995043294/job/107617852005)
+**5. Автотесты: ошибок нет, сборка успешна** —
+[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/37618698750/job/112783218549)
 
 ![Автотесты](docs/screenshots/05-tests.png)
 
 **6. SAST — CodeQL** —
-[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/35995043294/job/107617852089)
+[лог job](https://github.com/PaulLocust/CS-lab1/actions/runs/37618698750/job/112783218612)
 
 ![Отчёт CodeQL](docs/screenshots/06-codeql.png)
 
@@ -592,10 +593,10 @@ NVD указывает исправление в Spring Security 6.5.12, но т
 
 ## Ссылка на успешный запуск pipeline
 
-* **Последний успешный запуск:** <https://github.com/PaulLocust/CS-lab1/actions/runs/35995043294>
-  — статус `Success`, все пять job зелёные, отчёты сканеров в артефактах.
-  Длительность job: сборка и тесты 47 с, SpotBugs 52 с, Trivy 42 с,
-  CodeQL 80 с, OWASP Dependency-Check 156 с (холодный старт, база CVE строилась с нуля)
+* **Последний успешный запуск:** <https://github.com/PaulLocust/CS-lab1/actions/runs/37618698750>
+  — статус `Success`, все пять job зелёные, 2 мин 51 с, отчёты сканеров в артефактах.
+  Длительность job: сборка и тесты 41 с, SpotBugs 31 с, Trivy 36 с,
+  CodeQL 1 мин 32 с, OWASP Dependency-Check 2 мин 47 с (холодный старт, база CVE строилась с нуля)
 * Все запуски workflow «CI / Security»:
   <https://github.com/PaulLocust/CS-lab1/actions/workflows/ci.yml>
 
